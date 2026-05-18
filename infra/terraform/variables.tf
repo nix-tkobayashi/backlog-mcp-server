@@ -1,0 +1,52 @@
+variable "aws_region" {
+  type    = string
+  default = "ap-northeast-1"
+}
+
+variable "backlog_zone_id" {
+  type        = string
+  description = "Route53 hosted zone ID for backlog.ops.tasdg.info"
+}
+
+variable "backlog_acm_arn" {
+  type        = string
+  description = "ACM certificate ARN for *.backlog.ops.tasdg.info"
+}
+
+variable "sites" {
+  type = map(object({
+    backlog_domain  = string
+    oauth_client_id = string
+  }))
+  description = "Map of site name → Backlog OAuth config. Key becomes the subdomain: <key>.backlog.ops.tasdg.info"
+
+  validation {
+    condition     = alltrue([for k, _ in var.sites : can(regex("^[a-z0-9_]+$", k))])
+    error_message = "Site keys must contain only lowercase letters, digits, and underscores (used as DNS labels and environment variable names)."
+  }
+}
+
+variable "container_image_tag" {
+  type    = string
+  default = "latest"
+}
+
+variable "ecs_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "ecs_memory" {
+  type    = number
+  default = 512
+}
+
+variable "log_retention_days" {
+  type    = number
+  default = 30
+}
+
+variable "vpc_cidr" {
+  type    = string
+  default = "10.100.0.0/16"
+}

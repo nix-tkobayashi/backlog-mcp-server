@@ -134,8 +134,16 @@ export const runHttpMcpServer = async (
   const allowedHostnames = buildAllowedHostnames(host, allowedHosts);
   const oauthEnabled = !!(oauthResolver && tokenStore);
 
+  app.get('/health', (c) =>
+    c.json({ status: 'healthy', timestamp: new Date().toISOString(), version })
+  );
+
   if (allowedHostnames) {
     app.use('*', async (c, next) => {
+      if (c.req.path === '/health') {
+        await next();
+        return;
+      }
       const hostError = checkHostHeader(
         c.req.raw.headers.get('host'),
         allowedHostnames
@@ -144,10 +152,6 @@ export const runHttpMcpServer = async (
       await next();
     });
   }
-
-  app.get('/health', (c) =>
-    c.json({ status: 'healthy', timestamp: new Date().toISOString(), version })
-  );
 
   if (oauthEnabled) {
     const { createOAuthRoutes } = await import('./auth/oauthRoutes.js');

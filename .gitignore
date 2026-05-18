@@ -53,3 +53,10 @@ temp/
 
 # MCPB bundle
 *.mcpb
+
+# Terraform
+*.tfstate
+*.tfstate.*
+tfplan
+.terraform/
+terraform.tfvars
