@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import { default as env } from 'env-var';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { getBacklogOAuthConfig } from './auth/backlogOAuthConfig.js';
+import { getOAuthConfigResolver } from './auth/backlogOAuthConfig.js';
 import { TokenStore } from './auth/tokenStore.js';
 import { createTranslationHelper } from './createTranslationHelper.js';
 import { createBacklogMcpServer } from './createBacklogMcpServer.js';
@@ -44,7 +44,7 @@ process.on('unhandledRejection', (reason) => {
 
 dotenv.config();
 
-const oauthConfig = getBacklogOAuthConfig();
+const oauthResolver = getOAuthConfigResolver();
 
 const argv = yargs(hideBin(process.argv))
   .option('transport', {
@@ -125,12 +125,12 @@ Available toolsets:
   })
   .parseSync();
 
-const clientRegistry = oauthConfig
-  ? createOAuthBacklogClientRegistry(oauthConfig.backlogDomain)
+const clientRegistry = oauthResolver
+  ? createOAuthBacklogClientRegistry()
   : createBacklogClientRegistry();
 const backlog = clientRegistry.createScopedClient();
 
-const tokenStore = oauthConfig ? new TokenStore() : undefined;
+const tokenStore = oauthResolver ? new TokenStore() : undefined;
 let cleanupTimer: ReturnType<typeof setInterval> | undefined;
 if (tokenStore) {
   cleanupTimer = setInterval(() => tokenStore.cleanup(), 5 * 60 * 1000);
@@ -178,7 +178,7 @@ function normalizeHttpPath(p: string): string {
 }
 
 async function main() {
-  if (oauthConfig && argv.transport === 'stdio') {
+  if (oauthResolver && argv.transport === 'stdio') {
     logger.warn(
       'OAuth is configured but transport is stdio. OAuth is only available with HTTP transport.'
     );
@@ -187,13 +187,17 @@ async function main() {
   if (argv.transport === 'http') {
     const httpPath = normalizeHttpPath(argv.httpPath);
     const allowedHostsRaw = argv.httpAllowedHosts;
-    const allowedHosts =
+    const explicitHosts =
       allowedHostsRaw && allowedHostsRaw.trim().length > 0
         ? allowedHostsRaw
             .split(',')
             .map((h) => h.trim())
             .filter(Boolean)
         : undefined;
+
+    const allowedHosts =
+      explicitHosts ??
+      (oauthResolver ? oauthResolver.getConfiguredHostnames() : undefined);
 
     const { shutdown } = await runHttpMcpServer({
       host: argv.httpHost,
@@ -203,7 +207,7 @@ async function main() {
       enableJsonResponse: argv.httpJsonResponse,
       allowedHosts,
       createServer,
-      oauthConfig,
+      oauthResolver,
       tokenStore,
     });
 
@@ -224,9 +228,9 @@ async function main() {
         host: argv.httpHost,
         port: argv.httpPort,
         path: httpPath,
-        oauth: !!oauthConfig,
+        oauth: !!oauthResolver,
       },
-      oauthConfig
+      oauthResolver
         ? 'Backlog MCP Server listening (Streamable HTTP + OAuth)'
         : 'Backlog MCP Server listening (Streamable HTTP)'
     );

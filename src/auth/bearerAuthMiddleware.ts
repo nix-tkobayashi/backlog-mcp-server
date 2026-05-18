@@ -3,7 +3,7 @@
 
 import type { MiddlewareHandler } from 'hono';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import type { BacklogOAuthConfig } from './backlogOAuthConfig.js';
+import type { OAuthConfigResolver } from './backlogOAuthConfig.js';
 import { verifyBacklogToken } from './backlogOAuthClient.js';
 import type { TokenStore } from './tokenStore.js';
 import { logger } from '../utils/logger.js';
@@ -12,13 +12,20 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function createBearerAuthMiddleware(
   store: TokenStore,
-  config: BacklogOAuthConfig,
+  resolver: OAuthConfigResolver,
   mcpPath: string
 ): MiddlewareHandler {
   const prmPath = mcpPath === '/' ? '' : mcpPath;
-  const resourceMetadataUrl = `${config.serverBaseUrl}/.well-known/oauth-protected-resource${prmPath}`;
+
+  function buildResourceMetadataUrl(host: string): string {
+    const config = resolver.resolve(host);
+    const baseUrl = config?.serverBaseUrl ?? `https://${host.split(':')[0]}`;
+    return `${baseUrl}/.well-known/oauth-protected-resource${prmPath}`;
+  }
 
   return async (c, next) => {
+    const host = c.req.header('host') ?? '';
+    const resourceMetadataUrl = buildResourceMetadataUrl(host);
     const authHeader = c.req.header('authorization');
 
     if (!authHeader) {
@@ -65,13 +72,14 @@ export function createBearerAuthMiddleware(
     const cached = store.getCachedVerification(mcpToken);
     if (cached) {
       c.set('authInfo', cached);
+      c.set('backlogDomain', tokenEntry.backlogDomain);
       await next();
       return;
     }
 
     try {
       const user = await verifyBacklogToken(
-        config.backlogDomain,
+        tokenEntry.backlogDomain,
         tokenEntry.backlogAccessToken
       );
       const authInfo: AuthInfo = {
@@ -82,6 +90,7 @@ export function createBearerAuthMiddleware(
       };
       store.cacheVerification(mcpToken, authInfo, CACHE_TTL_MS);
       c.set('authInfo', authInfo);
+      c.set('backlogDomain', tokenEntry.backlogDomain);
       await next();
     } catch (err) {
       logger.warn({ err }, 'Bearer token verification failed');

@@ -8,6 +8,14 @@ export type BacklogOAuthConfig = {
   serverBaseUrl: string;
 };
 
+export type OAuthConfigResolver = {
+  resolve: (host: string) => BacklogOAuthConfig | undefined;
+  resolveByBacklogDomain: (
+    backlogDomain: string
+  ) => BacklogOAuthConfig | undefined;
+  getConfiguredHostnames: () => string[];
+};
+
 type Environment = Record<string, string | undefined>;
 
 export function getBacklogOAuthConfig(
@@ -42,5 +50,79 @@ export function getBacklogOAuthConfig(
     clientSecret,
     backlogDomain,
     serverBaseUrl: serverBaseUrl.replace(/\/+$/, ''),
+  };
+}
+
+function extractHostname(baseUrl: string): string {
+  return new URL(baseUrl).hostname;
+}
+
+function parseMultiSiteConfigs(
+  env: Environment
+): Map<string, BacklogOAuthConfig> {
+  const siteNames = new Set<string>();
+  const prefix = 'BACKLOG_OAUTH_SITE_';
+  for (const key of Object.keys(env)) {
+    const match = key.match(
+      /^BACKLOG_OAUTH_SITE_([A-Z0-9_]+)_(BASE_URL|CLIENT_ID|CLIENT_SECRET|DOMAIN)$/
+    );
+    if (match) siteNames.add(match[1]);
+  }
+
+  const configs = new Map<string, BacklogOAuthConfig>();
+  for (const name of siteNames) {
+    const baseUrl = env[`${prefix}${name}_BASE_URL`];
+    const clientId = env[`${prefix}${name}_CLIENT_ID`];
+    const clientSecret = env[`${prefix}${name}_CLIENT_SECRET`];
+    const domain = env[`${prefix}${name}_DOMAIN`];
+
+    if (!baseUrl || !clientId || !clientSecret || !domain) {
+      throw new Error(
+        `Incomplete OAuth site configuration for ${name}. ` +
+          `All of BACKLOG_OAUTH_SITE_${name}_BASE_URL, _CLIENT_ID, _CLIENT_SECRET, and _DOMAIN are required.`
+      );
+    }
+
+    const hostname = extractHostname(baseUrl);
+    configs.set(hostname, {
+      clientId,
+      clientSecret,
+      backlogDomain: domain,
+      serverBaseUrl: baseUrl.replace(/\/+$/, ''),
+    });
+  }
+
+  return configs;
+}
+
+export function getOAuthConfigResolver(
+  env: Environment = process.env
+): OAuthConfigResolver | undefined {
+  const multiSiteConfigs = parseMultiSiteConfigs(env);
+
+  if (multiSiteConfigs.size > 0) {
+    const byDomain = new Map<string, BacklogOAuthConfig>();
+    for (const config of multiSiteConfigs.values()) {
+      byDomain.set(config.backlogDomain, config);
+    }
+    return {
+      resolve: (host: string) => {
+        const hostname = host.split(':')[0];
+        return multiSiteConfigs.get(hostname);
+      },
+      resolveByBacklogDomain: (backlogDomain: string) =>
+        byDomain.get(backlogDomain),
+      getConfiguredHostnames: () => [...multiSiteConfigs.keys()],
+    };
+  }
+
+  const singleConfig = getBacklogOAuthConfig(env);
+  if (!singleConfig) return undefined;
+
+  const hostname = extractHostname(singleConfig.serverBaseUrl);
+  return {
+    resolve: () => singleConfig,
+    resolveByBacklogDomain: () => singleConfig,
+    getConfiguredHostnames: () => [hostname],
   };
 }

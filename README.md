@@ -209,8 +209,29 @@ The server automatically exposes the following OAuth endpoints when OAuth is ena
 
 MCP clients that support the MCP authorization specification will use these endpoints automatically.
 
+#### Multi-Site OAuth (Host-Based Multi-Tenancy)
+
+You can serve multiple Backlog organizations from a single server process by assigning a dedicated hostname to each organization. The server resolves the target Backlog space from the `Host` header of each request.
+
+Set environment variables using the `BACKLOG_OAUTH_SITE_<NAME>_*` pattern:
+
+```env
+BACKLOG_OAUTH_SITE_A_BASE_URL=https://mcp-a.example.com
+BACKLOG_OAUTH_SITE_A_CLIENT_ID=your-client-id-a
+BACKLOG_OAUTH_SITE_A_CLIENT_SECRET=your-client-secret-a
+BACKLOG_OAUTH_SITE_A_DOMAIN=company-a.backlog.com
+
+BACKLOG_OAUTH_SITE_B_BASE_URL=https://mcp-b.example.com
+BACKLOG_OAUTH_SITE_B_CLIENT_ID=your-client-id-b
+BACKLOG_OAUTH_SITE_B_CLIENT_SECRET=your-client-secret-b
+BACKLOG_OAUTH_SITE_B_DOMAIN=company-b.backlog.com
+```
+
+Each site requires its own Backlog OAuth application registration with the redirect URI set to `<BASE_URL>/callback`. The `--http-allowed-hosts` flag is automatically derived from the configured hostnames.
+
+> **Note:** When multi-site variables are present, single-site variables (`BACKLOG_OAUTH_CLIENT_ID`, etc.) are ignored.
+
 > **Limitations:**
-> - OAuth mode currently supports a single Backlog organization. It is not compatible with the multi-organization configuration.
 > - Client registrations and tokens are stored in memory and will be lost on server restart.
 
 ## Tool Configuration

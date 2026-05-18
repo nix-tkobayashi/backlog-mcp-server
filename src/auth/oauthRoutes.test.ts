@@ -5,7 +5,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createOAuthRoutes } from './oauthRoutes.js';
 import { TokenStore } from './tokenStore.js';
-import type { BacklogOAuthConfig } from './backlogOAuthConfig.js';
+import type {
+  BacklogOAuthConfig,
+  OAuthConfigResolver,
+} from './backlogOAuthConfig.js';
 
 vi.mock('./backlogOAuthClient.js', () => ({
   buildBacklogAuthorizationUrl: vi.fn(
@@ -33,6 +36,12 @@ const config: BacklogOAuthConfig = {
   serverBaseUrl: 'https://mcp.example.com',
 };
 
+const resolver: OAuthConfigResolver = {
+  resolve: () => config,
+  resolveByBacklogDomain: () => config,
+  getConfiguredHostnames: () => ['mcp.example.com'],
+};
+
 describe('createOAuthRoutes', () => {
   let store: TokenStore;
   let app: ReturnType<typeof createOAuthRoutes>;
@@ -40,12 +49,14 @@ describe('createOAuthRoutes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store = new TokenStore();
-    app = createOAuthRoutes(config, store, '/mcp');
+    app = createOAuthRoutes(resolver, store, '/mcp');
   });
 
   describe('GET /.well-known/oauth-authorization-server', () => {
     it('returns authorization server metadata', async () => {
-      const res = await app.request('/.well-known/oauth-authorization-server');
+      const res = await app.request('/.well-known/oauth-authorization-server', {
+        headers: { Host: 'mcp.example.com' },
+      });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.issuer).toBe('https://mcp.example.com');
@@ -63,7 +74,8 @@ describe('createOAuthRoutes', () => {
   describe('GET /.well-known/oauth-protected-resource/mcp', () => {
     it('returns protected resource metadata', async () => {
       const res = await app.request(
-        '/.well-known/oauth-protected-resource/mcp'
+        '/.well-known/oauth-protected-resource/mcp',
+        { headers: { Host: 'mcp.example.com' } }
       );
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -157,7 +169,8 @@ describe('createOAuthRoutes', () => {
   describe('GET /authorize', () => {
     it('rejects unknown client_id', async () => {
       const res = await app.request(
-        '/authorize?client_id=unknown&redirect_uri=https://x.com/cb&response_type=code&code_challenge=ch&code_challenge_method=S256'
+        '/authorize?client_id=unknown&redirect_uri=https://x.com/cb&response_type=code&code_challenge=ch&code_challenge_method=S256',
+        { headers: { Host: 'mcp.example.com' } }
       );
       expect(res.status).toBe(400);
     });
@@ -172,7 +185,7 @@ describe('createOAuthRoutes', () => {
 
       const res = await app.request(
         '/authorize?client_id=c1&redirect_uri=https://client.example.com/cb&response_type=code&code_challenge=test-challenge&code_challenge_method=S256&state=my-state',
-        { redirect: 'manual' }
+        { redirect: 'manual', headers: { Host: 'mcp.example.com' } }
       );
       expect(res.status).toBe(302);
       const location = res.headers.get('location');
@@ -188,7 +201,8 @@ describe('createOAuthRoutes', () => {
       });
 
       const res = await app.request(
-        '/authorize?client_id=c1&redirect_uri=https://evil.com/cb&response_type=code&code_challenge=ch&code_challenge_method=S256'
+        '/authorize?client_id=c1&redirect_uri=https://evil.com/cb&response_type=code&code_challenge=ch&code_challenge_method=S256',
+        { headers: { Host: 'mcp.example.com' } }
       );
       expect(res.status).toBe(400);
     });
@@ -203,7 +217,7 @@ describe('createOAuthRoutes', () => {
 
       const res = await app.request(
         '/authorize?client_id=c1&redirect_uri=https://client.example.com/cb&response_type=code&code_challenge=ch&code_challenge_method=S256&resource=https://wrong.example.com/mcp',
-        { redirect: 'manual' }
+        { redirect: 'manual', headers: { Host: 'mcp.example.com' } }
       );
       expect(res.status).toBe(302);
       const location = res.headers.get('location')!;
@@ -226,6 +240,7 @@ describe('createOAuthRoutes', () => {
         redirectUri: 'https://client.example.com/cb',
         scopes: [],
         state: 'mcp-state-1',
+        siteHost: 'mcp.example.com',
         createdAt: Date.now(),
       });
 
@@ -273,6 +288,7 @@ describe('createOAuthRoutes', () => {
           expires_in: 3600,
           refresh_token: 'bl-rt',
         },
+        backlogDomain: 'example.backlog.com',
         codeChallenge: challenge,
         redirectUri: 'https://client.example.com/cb',
         expiresAt: Date.now() + 600_000,
@@ -322,6 +338,7 @@ describe('createOAuthRoutes', () => {
           expires_in: 3600,
           refresh_token: 'bl-rt',
         },
+        backlogDomain: 'example.backlog.com',
         codeChallenge: challenge,
         redirectUri: 'https://client.example.com/cb',
         resource: 'https://mcp.example.com/mcp',
@@ -360,6 +377,7 @@ describe('createOAuthRoutes', () => {
 
       store.storeMcpRefreshToken('mcp-refresh-exp', {
         backlogRefreshToken: 'bl-refresh',
+        backlogDomain: 'example.backlog.com',
         clientId: 'c1',
         expiresAt: Date.now() - 1000,
       });
@@ -400,6 +418,7 @@ describe('createOAuthRoutes', () => {
           expires_in: 3600,
           refresh_token: 'bl-rt',
         },
+        backlogDomain: 'example.backlog.com',
         codeChallenge: challenge,
         redirectUri: 'https://client.example.com/cb',
         expiresAt: Date.now() + 600_000,
@@ -441,6 +460,7 @@ describe('createOAuthRoutes', () => {
           expires_in: 3600,
           refresh_token: 'rt',
         },
+        backlogDomain: 'example.backlog.com',
         codeChallenge: 'correct-challenge',
         redirectUri: 'https://client.example.com/cb',
         expiresAt: Date.now() + 600_000,
@@ -475,6 +495,7 @@ describe('createOAuthRoutes', () => {
 
       store.storeMcpRefreshToken('mcp-refresh-1', {
         backlogRefreshToken: 'bl-refresh',
+        backlogDomain: 'example.backlog.com',
         clientId: 'c1',
         expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       });
@@ -533,6 +554,7 @@ describe('createOAuthRoutes', () => {
 
       store.storeMcpRefreshToken('mcp-refresh-2', {
         backlogRefreshToken: 'bl-refresh',
+        backlogDomain: 'example.backlog.com',
         clientId: 'other-client',
         expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       });
@@ -567,6 +589,7 @@ describe('createOAuthRoutes', () => {
 
       store.storeMcpRefreshToken('mcp-refresh-retry', {
         backlogRefreshToken: 'bl-refresh',
+        backlogDomain: 'example.backlog.com',
         clientId: 'c1',
         expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       });
