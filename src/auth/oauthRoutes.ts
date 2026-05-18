@@ -382,6 +382,9 @@ export function createOAuthRoutes(
   app.post('/token', async (c) => {
     c.header('Cache-Control', 'no-store');
 
+    const host = c.req.header('host') ?? '';
+    const hostConfig = resolveFromHost(host);
+
     const body = (await c.req.parseBody()) as Record<string, string>;
     const grantType = body.grant_type;
     const clientId = body.client_id;
@@ -448,6 +451,16 @@ export function createOAuthRoutes(
         );
       }
 
+      if (hostConfig && entry.backlogDomain !== hostConfig.backlogDomain) {
+        return c.json(
+          oauthError(
+            'invalid_grant',
+            'Authorization code was issued for a different site'
+          ),
+          400
+        );
+      }
+
       const mcpAccessToken = randomBytes(32).toString('hex');
       const mcpRefreshToken = randomBytes(32).toString('hex');
 
@@ -499,10 +512,25 @@ export function createOAuthRoutes(
         );
       }
 
-      const refreshConfig = resolver.resolveByBacklogDomain(
-        refreshEntry.backlogDomain
-      );
+      if (
+        hostConfig &&
+        refreshEntry.backlogDomain !== hostConfig.backlogDomain
+      ) {
+        store.storeMcpRefreshToken(refreshToken, refreshEntry);
+        return c.json(
+          oauthError(
+            'invalid_grant',
+            'Refresh token was issued for a different site'
+          ),
+          400
+        );
+      }
+
+      const refreshConfig =
+        hostConfig ??
+        resolver.resolveByBacklogDomain(refreshEntry.backlogDomain);
       if (!refreshConfig) {
+        store.storeMcpRefreshToken(refreshToken, refreshEntry);
         return c.json(
           oauthError(
             'server_error',

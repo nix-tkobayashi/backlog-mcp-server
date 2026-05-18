@@ -14,6 +14,7 @@ export type OAuthConfigResolver = {
     backlogDomain: string
   ) => BacklogOAuthConfig | undefined;
   getConfiguredHostnames: () => string[];
+  isMultiSite: boolean;
 };
 
 type Environment = Record<string, string | undefined>;
@@ -92,6 +93,17 @@ function parseMultiSiteConfigs(
     });
   }
 
+  const seenDomains = new Map<string, string>();
+  for (const [hostname, config] of configs) {
+    const existing = seenDomains.get(config.backlogDomain);
+    if (existing) {
+      throw new Error(
+        `Duplicate Backlog domain '${config.backlogDomain}' configured for both '${existing}' and '${hostname}'. Each site must use a unique Backlog domain.`
+      );
+    }
+    seenDomains.set(config.backlogDomain, hostname);
+  }
+
   return configs;
 }
 
@@ -113,6 +125,7 @@ export function getOAuthConfigResolver(
       resolveByBacklogDomain: (backlogDomain: string) =>
         byDomain.get(backlogDomain),
       getConfiguredHostnames: () => [...multiSiteConfigs.keys()],
+      isMultiSite: true,
     };
   }
 
@@ -124,5 +137,6 @@ export function getOAuthConfigResolver(
     resolve: () => singleConfig,
     resolveByBacklogDomain: () => singleConfig,
     getConfiguredHostnames: () => [hostname],
+    isMultiSite: false,
   };
 }

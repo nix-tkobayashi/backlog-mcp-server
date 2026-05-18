@@ -197,7 +197,9 @@ async function main() {
 
     const allowedHosts =
       explicitHosts ??
-      (oauthResolver ? oauthResolver.getConfiguredHostnames() : undefined);
+      (oauthResolver?.isMultiSite
+        ? oauthResolver.getConfiguredHostnames()
+        : undefined);
 
     const { shutdown } = await runHttpMcpServer({
       host: argv.httpHost,

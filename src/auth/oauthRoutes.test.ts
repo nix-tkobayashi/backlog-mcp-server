@@ -40,6 +40,7 @@ const resolver: OAuthConfigResolver = {
   resolve: () => config,
   resolveByBacklogDomain: () => config,
   getConfiguredHostnames: () => ['mcp.example.com'],
+  isMultiSite: false,
 };
 
 describe('createOAuthRoutes', () => {

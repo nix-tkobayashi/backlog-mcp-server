@@ -27,6 +27,7 @@ const resolver: OAuthConfigResolver = {
   resolve: () => config,
   resolveByBacklogDomain: () => config,
   getConfiguredHostnames: () => ['mcp.example.com'],
+  isMultiSite: false,
 };
 
 describe('createBearerAuthMiddleware', () => {
@@ -117,6 +118,26 @@ describe('createBearerAuthMiddleware', () => {
       'example.backlog.com',
       'bl-token-2'
     );
+  });
+
+  it('rejects token issued for a different site', async () => {
+    store.storeMcpToken('mcp-token-cross', {
+      backlogAccessToken: 'bl-token-cross',
+      backlogDomain: 'other.backlog.com',
+      clientId: 'c1',
+      expiresAt: Date.now() + 3600_000,
+    });
+
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer mcp-token-cross',
+        Host: 'mcp.example.com',
+      },
+    });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error_description).toContain('different site');
   });
 
   it('returns 401 when Backlog token verification fails', async () => {

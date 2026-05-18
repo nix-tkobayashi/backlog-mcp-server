@@ -69,6 +69,21 @@ export function createBearerAuthMiddleware(
       );
     }
 
+    const hostConfig = resolver.resolve(host);
+    if (hostConfig && tokenEntry.backlogDomain !== hostConfig.backlogDomain) {
+      c.header(
+        'WWW-Authenticate',
+        `Bearer error="invalid_token", error_description="Token was issued for a different site", resource_metadata="${resourceMetadataUrl}"`
+      );
+      return c.json(
+        {
+          error: 'invalid_token',
+          error_description: 'Token was issued for a different site',
+        },
+        401
+      );
+    }
+
     const cached = store.getCachedVerification(mcpToken);
     if (cached) {
       c.set('authInfo', cached);
