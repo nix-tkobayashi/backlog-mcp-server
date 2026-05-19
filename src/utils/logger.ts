@@ -8,7 +8,7 @@ const isProd = process.env.NODE_ENV === 'production';
 
 export const logger = pino(
   {
-    level: isProd ? 'error' : 'debug',
+    level: process.env.LOG_LEVEL ?? (isProd ? 'error' : 'debug'),
     transport: isProd
       ? undefined
       : {
