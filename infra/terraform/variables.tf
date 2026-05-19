@@ -21,8 +21,8 @@ variable "sites" {
   description = "Map of site name → Backlog OAuth config. Key becomes the subdomain: <key>.backlog.ops.tasdg.info"
 
   validation {
-    condition     = alltrue([for k, _ in var.sites : can(regex("^[a-z0-9_]+$", k))])
-    error_message = "Site keys must contain only lowercase letters, digits, and underscores (used as DNS labels and environment variable names)."
+    condition     = alltrue([for k, _ in var.sites : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", k))])
+    error_message = "Site keys must be valid DNS labels: lowercase letters, digits, and hyphens (no leading/trailing hyphen)."
   }
 }
 
