@@ -29,9 +29,9 @@ export function createCognitoJwtVerifier(
       );
     }
 
-    if (claims.client_id && claims.client_id !== config.clientId) {
+    if (claims.client_id !== config.clientId) {
       throw new Error(
-        `JWT client_id mismatch: expected ${config.clientId}, got ${claims.client_id}`
+        `JWT client_id mismatch: expected ${config.clientId}, got ${String(claims.client_id)}`
       );
     }
 

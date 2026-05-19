@@ -95,8 +95,8 @@ export function createCognitoRoutes(
         { userId, backlogDomain, backlogUserId: user.id },
         'Verified Backlog API key'
       );
-    } catch (err) {
-      logger.warn({ err, userId, backlogDomain }, 'Backlog API key verification failed');
+    } catch {
+      logger.warn({ userId, backlogDomain }, 'Backlog API key verification failed');
       return c.json(
         {
           error: 'invalid_api_key',
