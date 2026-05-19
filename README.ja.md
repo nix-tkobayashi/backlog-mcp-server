@@ -185,8 +185,29 @@ OAuth有効時、サーバーは以下のOAuthエンドポイントを自動的�
 
 MCP認可仕様に対応するMCPクライアントは、これらのエンドポイントを自動的に使用します。
 
+#### マルチサイトOAuth（ホスト名ベースのマルチテナント）
+
+1つのサーバープロセスで複数のBacklog組織を提供できます。各組織に専用のホスト名を割り当て、リクエストの `Host` ヘッダーから接続先Backlogスペースを解決します。
+
+`BACKLOG_OAUTH_SITE_<NAME>_*` パターンで環境変数を設定します：
+
+```env
+BACKLOG_OAUTH_SITE_A_BASE_URL=https://mcp-a.example.com
+BACKLOG_OAUTH_SITE_A_CLIENT_ID=your-client-id-a
+BACKLOG_OAUTH_SITE_A_CLIENT_SECRET=your-client-secret-a
+BACKLOG_OAUTH_SITE_A_DOMAIN=company-a.backlog.com
+
+BACKLOG_OAUTH_SITE_B_BASE_URL=https://mcp-b.example.com
+BACKLOG_OAUTH_SITE_B_CLIENT_ID=your-client-id-b
+BACKLOG_OAUTH_SITE_B_CLIENT_SECRET=your-client-secret-b
+BACKLOG_OAUTH_SITE_B_DOMAIN=company-b.backlog.com
+```
+
+各サイトには、リダイレクトURIを `<BASE_URL>/callback` に設定したBacklog OAuthアプリケーション登録が必要です。`--http-allowed-hosts` フラグは設定されたホスト名から自動的に導出されます。
+
+> **注意:** マルチサイト変数が存在する場合、単一サイト変数（`BACKLOG_OAUTH_CLIENT_ID` 等）は無視されます。
+
 > **制約事項:**
-> - OAuthモードは現在、単一のBacklog組織のみをサポートしています。複数組織設定との併用はできません。
 > - クライアント登録やトークンはメモリ内に保持されるため、サーバー再起動時に失われます。
 
 ## ツール設定
