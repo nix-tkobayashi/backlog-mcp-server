@@ -1,0 +1,23 @@
+# Route53 hosted zone for backlog.ops.tasdg.info
+backlog_zone_id = "Z0440432Q7B3TON0P68Q"
+
+# ACM certificate for *.backlog.ops.tasdg.info
+backlog_acm_arn = "arn:aws:acm:ap-northeast-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Each key becomes a subdomain: <key>.backlog.ops.tasdg.info
+# Client secrets are stored in Secrets Manager (not here).
+# After `terraform apply`, populate each secret:
+#   aws secretsmanager put-secret-value \
+#     --secret-id backlog-mcp-server/<key>/oauth-client-secret \
+#     --secret-string '<CLIENT_SECRET>' \
+#     --region ap-northeast-1
+sites = {
+  tasdg = {
+    backlog_domain  = "tasdgbl.backlog.jp"
+    oauth_client_id = "your-oauth-client-id"
+  }
+  igrid = {
+    backlog_domain  = "igrid.backlog.jp"
+    oauth_client_id = "your-oauth-client-id"
+  }
+}

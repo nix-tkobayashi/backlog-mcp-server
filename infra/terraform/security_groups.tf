@@ -31,11 +31,9 @@ locals {
 # --- ALB SG rules ---
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
-  for_each = toset(local.allowed_cidrs)
-
   security_group_id = aws_security_group.alb.id
-  description       = "HTTPS from ${each.value}"
-  cidr_ipv4         = each.value
+  description       = "HTTPS from anywhere (OAuth-protected)"
+  cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"

@@ -207,12 +207,15 @@ export function createOAuthRoutes(
     const resource = params.resource;
 
     // Phase 1: Validate client and redirect_uri (errors returned directly)
+    logger.info({ clientId, redirectUri, resource }, 'Authorize request received');
+
     if (!clientId) {
       return c.json(oauthError('invalid_request', 'Missing client_id'), 400);
     }
 
     const client = store.getClient(clientId);
     if (!client) {
+      logger.warn({ clientId }, 'Authorize: unknown client_id');
       return c.json(oauthError('invalid_client', 'Unknown client_id'), 400);
     }
 
