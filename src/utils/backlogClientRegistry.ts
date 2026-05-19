@@ -1,6 +1,7 @@
 import { Backlog } from 'backlog-js';
 import {
   getCurrentAccessToken,
+  getCurrentApiKey,
   getCurrentBacklogDomain,
 } from '../auth/backlogAuthContext.js';
 import { getCurrentOrganization } from './backlogOrganizationContext.js';
@@ -208,15 +209,22 @@ export function createOAuthBacklogClientRegistry(): BacklogClientRegistry {
   const defaultName = 'default';
 
   const resolveOAuthClient = (): Backlog => {
-    const token = getCurrentAccessToken();
-    if (!token) {
-      throw new Error('No OAuth access token in current request context');
-    }
     const domain = getCurrentBacklogDomain();
     if (!domain) {
       throw new Error('No Backlog domain in current request context');
     }
-    return new Backlog({ host: domain, accessToken: token });
+
+    const apiKey = getCurrentApiKey();
+    if (apiKey) {
+      return new Backlog({ host: domain, apiKey });
+    }
+
+    const token = getCurrentAccessToken();
+    if (token) {
+      return new Backlog({ host: domain, accessToken: token });
+    }
+
+    throw new Error('No Backlog credentials in current request context');
   };
 
   return {
