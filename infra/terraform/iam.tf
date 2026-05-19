@@ -37,9 +37,47 @@ resource "aws_iam_role_policy_attachment" "secrets_read" {
   policy_arn = aws_iam_policy.secrets_read.arn
 }
 
-# --- Task Role (running container: minimal) ---
+# --- Task Role (running container: DynamoDB + KMS when Cognito enabled) ---
 
 resource "aws_iam_role" "ecs_task" {
   name               = "backlog-mcp-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+resource "aws_iam_policy" "cognito_vault" {
+  count = var.enable_cognito ? 1 : 0
+
+  name = "backlog-mcp-cognito-vault"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+        ]
+        Resource = aws_dynamodb_table.api_keys[0].arn
+      },
+      {
+        Sid    = "KMS"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+        ]
+        Resource = aws_kms_key.api_key_encryption[0].arn
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cognito_vault" {
+  count = var.enable_cognito ? 1 : 0
+
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.cognito_vault[0].arn
 }

@@ -50,3 +50,27 @@ variable "vpc_cidr" {
   type    = string
   default = "10.100.0.0/16"
 }
+
+variable "enable_cognito" {
+  type        = bool
+  default     = false
+  description = "Enable Cognito JWT authentication + API key vault for proxy users"
+}
+
+variable "cognito_domain_prefix" {
+  type        = string
+  default     = "backlog-mcp"
+  description = "Cognito hosted UI domain prefix (<prefix>.auth.<region>.amazoncognito.com)"
+}
+
+variable "cognito_callback_urls" {
+  type        = list(string)
+  default     = ["http://localhost:3000/callback"]
+  description = "OAuth callback URLs for Cognito app client"
+}
+
+variable "cognito_logout_urls" {
+  type        = list(string)
+  default     = ["http://localhost:3000"]
+  description = "Logout URLs for Cognito app client"
+}
