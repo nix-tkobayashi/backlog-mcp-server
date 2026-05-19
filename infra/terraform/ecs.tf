@@ -22,6 +22,14 @@ locals {
       valueFrom = aws_secretsmanager_secret.oauth_client_secret[name].arn
     }
   ]
+
+  cognito_env_vars = var.enable_cognito ? [
+    { name = "COGNITO_USER_POOL_ID", value = aws_cognito_user_pool.mcp_proxy[0].id },
+    { name = "COGNITO_REGION", value = var.aws_region },
+    { name = "COGNITO_CLIENT_ID", value = aws_cognito_user_pool_client.mcp_proxy[0].id },
+    { name = "DYNAMODB_API_KEY_TABLE", value = aws_dynamodb_table.api_keys[0].name },
+    { name = "KMS_KEY_ID", value = aws_kms_key.api_key_encryption[0].key_id },
+  ] : []
 }
 
 resource "aws_ecs_cluster" "main" {
@@ -65,6 +73,7 @@ resource "aws_ecs_task_definition" "mcp" {
         { name = "LOG_LEVEL", value = "info" },
       ],
       local.site_env_vars,
+      local.cognito_env_vars,
     )
 
     secrets = local.site_secrets

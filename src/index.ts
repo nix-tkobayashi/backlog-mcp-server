@@ -8,6 +8,8 @@ import { default as env } from 'env-var';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { getOAuthConfigResolver } from './auth/backlogOAuthConfig.js';
+import { getCognitoConfig } from './auth/cognitoConfig.js';
+import { ApiKeyVault } from './auth/apiKeyVault.js';
 import { TokenStore } from './auth/tokenStore.js';
 import { createTranslationHelper } from './createTranslationHelper.js';
 import { createBacklogMcpServer } from './createBacklogMcpServer.js';
@@ -45,6 +47,14 @@ process.on('unhandledRejection', (reason) => {
 dotenv.config();
 
 const oauthResolver = getOAuthConfigResolver();
+const cognitoConfig = getCognitoConfig();
+const apiKeyVault = cognitoConfig
+  ? new ApiKeyVault({
+      tableName: cognitoConfig.dynamoTableName,
+      kmsKeyId: cognitoConfig.kmsKeyId,
+      region: cognitoConfig.region,
+    })
+  : undefined;
 
 const argv = yargs(hideBin(process.argv))
   .option('transport', {
@@ -125,9 +135,10 @@ Available toolsets:
   })
   .parseSync();
 
-const clientRegistry = oauthResolver
-  ? createOAuthBacklogClientRegistry()
-  : createBacklogClientRegistry();
+const clientRegistry =
+  oauthResolver || cognitoConfig
+    ? createOAuthBacklogClientRegistry()
+    : createBacklogClientRegistry();
 const backlog = clientRegistry.createScopedClient();
 
 const tokenStore = oauthResolver ? new TokenStore() : undefined;
@@ -211,6 +222,8 @@ async function main() {
       createServer,
       oauthResolver,
       tokenStore,
+      cognitoConfig,
+      apiKeyVault,
     });
 
     process.once('SIGINT', () => {
@@ -231,9 +244,10 @@ async function main() {
         port: argv.httpPort,
         path: httpPath,
         oauth: !!oauthResolver,
+        cognito: !!cognitoConfig,
       },
-      oauthResolver
-        ? 'Backlog MCP Server listening (Streamable HTTP + OAuth)'
+      oauthResolver || cognitoConfig
+        ? `Backlog MCP Server listening (Streamable HTTP + ${[oauthResolver && 'OAuth', cognitoConfig && 'Cognito'].filter(Boolean).join(' + ')})`
         : 'Backlog MCP Server listening (Streamable HTTP)'
     );
     return;

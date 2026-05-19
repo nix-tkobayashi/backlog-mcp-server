@@ -9,8 +9,13 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
-import { runWithOAuthContext } from './auth/backlogAuthContext.js';
+import {
+  runWithOAuthContext,
+  runWithApiKeyContext,
+} from './auth/backlogAuthContext.js';
 import type { OAuthConfigResolver } from './auth/backlogOAuthConfig.js';
+import type { CognitoConfig } from './auth/cognitoConfig.js';
+import type { ApiKeyVault } from './auth/apiKeyVault.js';
 import type { TokenStore } from './auth/tokenStore.js';
 import { logger } from './utils/logger.js';
 import type { BacklogMCPServer } from './utils/wrapServerWithToolRegistry.js';
@@ -25,6 +30,8 @@ type RunHttpMcpServerOptions = {
   createServer: () => BacklogMCPServer;
   oauthResolver?: OAuthConfigResolver;
   tokenStore?: TokenStore;
+  cognitoConfig?: CognitoConfig;
+  apiKeyVault?: ApiKeyVault;
 };
 
 type HttpMcpServerHandle = {
@@ -117,6 +124,8 @@ export const runHttpMcpServer = async (
     createServer,
     oauthResolver,
     tokenStore,
+    cognitoConfig,
+    apiKeyVault,
   } = options;
 
   if ((host === '0.0.0.0' || host === '::') && !allowedHosts?.length) {
@@ -127,7 +136,12 @@ export const runHttpMcpServer = async (
   }
 
   const app = new Hono<{
-    Variables: { authInfo?: AuthInfo; backlogDomain?: string };
+    Variables: {
+      authInfo?: AuthInfo;
+      backlogDomain?: string;
+      authMode?: 'oauth' | 'cognito';
+      backlogApiKey?: string;
+    };
   }>();
   const transports: Record<string, WebStandardStreamableHTTPServerTransport> =
     {};
@@ -153,6 +167,20 @@ export const runHttpMcpServer = async (
     });
   }
 
+  const cognitoEnabled = !!(cognitoConfig && apiKeyVault);
+  let cognitoVerifier: Awaited<
+    ReturnType<typeof import('./auth/cognitoJwtVerifier.js').createCognitoJwtVerifier>
+  > | undefined;
+
+  if (cognitoEnabled) {
+    const { createCognitoJwtVerifier } = await import(
+      './auth/cognitoJwtVerifier.js'
+    );
+    const { createCognitoRoutes } = await import('./auth/cognitoRoutes.js');
+    cognitoVerifier = createCognitoJwtVerifier(cognitoConfig);
+    app.route('/', createCognitoRoutes(cognitoVerifier, apiKeyVault));
+  }
+
   if (oauthEnabled) {
     const { createOAuthRoutes } = await import('./auth/oauthRoutes.js');
     const { createBearerAuthMiddleware } = await import(
@@ -162,25 +190,43 @@ export const runHttpMcpServer = async (
     app.route('/', createOAuthRoutes(oauthResolver, tokenStore, mcpPath));
     app.use(
       mcpPath,
-      createBearerAuthMiddleware(tokenStore, oauthResolver, mcpPath)
+      createBearerAuthMiddleware(
+        tokenStore,
+        oauthResolver,
+        mcpPath,
+        cognitoVerifier,
+        apiKeyVault
+      )
     );
+  } else if (cognitoEnabled && cognitoVerifier) {
+    const { createCognitoOnlyAuthMiddleware } = await import(
+      './auth/bearerAuthMiddleware.js'
+    );
+    app.use(mcpPath, createCognitoOnlyAuthMiddleware(cognitoVerifier, apiKeyVault!));
   }
 
   app.all(mcpPath, async (c) => {
     const req = c.req.raw;
 
-    const authInfo = oauthEnabled
+    const authEnabled = oauthEnabled || cognitoEnabled;
+    const authInfo = authEnabled
       ? (c.get('authInfo') as AuthInfo | undefined)
       : undefined;
     const accessToken = authInfo?.token;
-    const backlogDomain = oauthEnabled
+    const backlogDomain = authEnabled
       ? (c.get('backlogDomain') as string | undefined)
       : undefined;
+    const authMode = c.get('authMode');
+    const backlogApiKey = c.get('backlogApiKey');
 
-    const withContext = <T>(fn: () => Promise<T>): Promise<T> =>
-      accessToken && backlogDomain
+    const withContext = <T>(fn: () => Promise<T>): Promise<T> => {
+      if (authMode === 'cognito' && backlogApiKey && backlogDomain) {
+        return runWithApiKeyContext(backlogApiKey, backlogDomain, fn);
+      }
+      return accessToken && backlogDomain
         ? runWithOAuthContext(accessToken, backlogDomain, fn)
         : fn();
+    };
 
     const sessionId = req.headers.get('mcp-session-id');
 

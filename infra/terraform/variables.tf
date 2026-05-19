@@ -21,8 +21,8 @@ variable "sites" {
   description = "Map of site name → Backlog OAuth config. Key becomes the subdomain: <key>.backlog.ops.tasdg.info"
 
   validation {
-    condition     = alltrue([for k, _ in var.sites : can(regex("^[a-z0-9_]+$", k))])
-    error_message = "Site keys must contain only lowercase letters, digits, and underscores (used as DNS labels and environment variable names)."
+    condition     = alltrue([for k, _ in var.sites : can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", k))])
+    error_message = "Site keys must be valid DNS labels: lowercase letters, digits, and hyphens (no leading/trailing hyphen)."
   }
 }
 
@@ -49,4 +49,28 @@ variable "log_retention_days" {
 variable "vpc_cidr" {
   type    = string
   default = "10.100.0.0/16"
+}
+
+variable "enable_cognito" {
+  type        = bool
+  default     = false
+  description = "Enable Cognito JWT authentication + API key vault for proxy users"
+}
+
+variable "cognito_domain_prefix" {
+  type        = string
+  default     = "backlog-mcp"
+  description = "Cognito hosted UI domain prefix (<prefix>.auth.<region>.amazoncognito.com)"
+}
+
+variable "cognito_callback_urls" {
+  type        = list(string)
+  default     = ["http://localhost:3000/callback"]
+  description = "OAuth callback URLs for Cognito app client"
+}
+
+variable "cognito_logout_urls" {
+  type        = list(string)
+  default     = ["http://localhost:3000"]
+  description = "Logout URLs for Cognito app client"
 }

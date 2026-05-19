@@ -3,37 +3,63 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-type OAuthContext = {
-  accessToken: string;
-  backlogDomain: string;
-};
+type BacklogAuthContext =
+  | { mode: 'oauth'; accessToken: string; backlogDomain: string }
+  | { mode: 'apiKey'; apiKey: string; backlogDomain: string };
 
-const oauthContextStorage = new AsyncLocalStorage<OAuthContext | undefined>();
+const authContextStorage = new AsyncLocalStorage<
+  BacklogAuthContext | undefined
+>();
 
 export function runWithOAuthContext<T>(
   accessToken: string,
   backlogDomain: string,
   fn: () => Promise<T>
 ): Promise<T> {
-  return oauthContextStorage.run({ accessToken, backlogDomain }, fn);
+  return authContextStorage.run(
+    { mode: 'oauth', accessToken, backlogDomain },
+    fn
+  );
+}
+
+export function runWithApiKeyContext<T>(
+  apiKey: string,
+  backlogDomain: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  return authContextStorage.run({ mode: 'apiKey', apiKey, backlogDomain }, fn);
 }
 
 export function runWithAccessToken<T>(
   token: string | undefined,
   fn: () => Promise<T>
 ): Promise<T> {
-  if (!token) return oauthContextStorage.run(undefined, fn);
-  const existing = oauthContextStorage.getStore();
-  return oauthContextStorage.run(
-    { accessToken: token, backlogDomain: existing?.backlogDomain ?? '' },
+  if (!token) return authContextStorage.run(undefined, fn);
+  const existing = authContextStorage.getStore();
+  return authContextStorage.run(
+    {
+      mode: 'oauth',
+      accessToken: token,
+      backlogDomain: existing?.backlogDomain ?? '',
+    },
     fn
   );
 }
 
 export function getCurrentAccessToken(): string | undefined {
-  return oauthContextStorage.getStore()?.accessToken;
+  const store = authContextStorage.getStore();
+  return store?.mode === 'oauth' ? store.accessToken : undefined;
+}
+
+export function getCurrentApiKey(): string | undefined {
+  const store = authContextStorage.getStore();
+  return store?.mode === 'apiKey' ? store.apiKey : undefined;
 }
 
 export function getCurrentBacklogDomain(): string | undefined {
-  return oauthContextStorage.getStore()?.backlogDomain;
+  return authContextStorage.getStore()?.backlogDomain;
+}
+
+export function getAuthMode(): 'oauth' | 'apiKey' | undefined {
+  return authContextStorage.getStore()?.mode;
 }
